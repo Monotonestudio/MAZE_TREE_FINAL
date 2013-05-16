@@ -1,0 +1,99 @@
+<?php
+
+	//some config stuff
+	$db['host'] = 'localhost';
+	$db['name'] = 'mazetree';
+	$db['user'] = 'root';
+	$db['pass'] = 'root';
+	$db['cset'] = 'utf8';	
+
+
+	//actual code
+	$db = new PDO('mysql:host='.$db['host'].';dbname='.$db['name'].';charset='.$db['cset'], $db['user'], $db['pass']);
+
+	if($_GET['t']){
+		echo generateJSON($_GET['t'], intval($_GET['max']));
+		exit;
+	}
+
+	if($_FILES["audio"]["tmp_name"]){		
+		if ($_FILES["audio"]["error"] > 0) {
+			echo "Error: " . $_FILES["audio"]["error"] . "<br>";
+		}else{
+			$sound = 'sounds/'.uniqid().'.mp3';
+			if( move_uploaded_file($_FILES["audio"]["tmp_name"], $sound) ){
+				$stmt = $db->prepare("INSERT INTO trees VALUES(NULL, :sound)");
+				$stmt->execute( array(':sound' => $sound) );
+				echo json_encode( array('tree_id' => $db->lastInsertId()) );
+				exit;
+			}else{
+				return json_encode( array('error' => 'upload failed') );
+			}
+		}
+	}
+
+	function generateJSON($tree_id, $max){
+		global $db;
+		if($max == 0) $max = 30;
+		$max--;
+ 		$trees = $db->prepare("SELECT id, sound FROM trees WHERE id=:id");
+		$trees->execute( array(':id' => $tree_id) );
+		if($trees->rowCount()>0){
+			$tree = $trees->fetch(PDO::FETCH_ASSOC);
+			$json['id'] = $tree['id'];
+			$json['sounds'][] = $tree;
+			$sounds = $db->prepare("SELECT id, sound FROM trees WHERE id<>:treeid ORDER BY RAND() LIMIT $max");
+			$sounds->execute( array(':treeid' => $tree['id']) );
+			while($sound = $sounds->fetch(PDO::FETCH_ASSOC)) {
+				$json['sounds'][] = $sound;
+  			}
+			return json_encode($json);
+		}
+		return json_encode( array('error' => 'invalid tree id') );
+	}		
+			
+	
+?><!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8" />
+		<title>Audio upload</title>
+	</head>
+	<body>
+		
+		<h1>Upload a new audio file:</h1>
+		<form action="index.php" method="post" enctype="multipart/form-data">
+			<label for="audio">Audio file:</label>
+			<input type="file" name="audio" id="audio"><br>
+			<input type="submit" name="submit" value="Upload">
+			<p id="report"> Please only upload audio files of WAV, MP3 or M4a format smaller than 512k in size </p>
+		</form>  		
+
+ 	<script>
+		document.forms[0].addEventListener('submit', function( evt ) {
+		console.log("hallo");
+    	var file = document.getElementById('audio').files[0];
+    	if (file) {
+    		console.log("there is a file");
+    		console.log("it's size = " + file.size);
+    		console.log("it's type = " + file.type);
+    	}
+
+    	var accept = true;
+
+    	if(file.size > (256 * 1024) {
+    		document.getElementById('report').innerHTML = "The file is too big."
+    		evt.preventDefault();
+    	} else if (file.type == 'audio/mpeg') || file.type == 'audio/m4a' || file.type == 'audio/wav') {
+			document.getElementById('report').innerHTML = "The file is not in MP3, M4a or WAV format"
+			evt.preventDefault();
+		}
+		}, false);
+
+	
+		</script>
+
+
+	</body>
+</html>
+
